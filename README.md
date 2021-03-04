@@ -1,2 +1,7 @@
 # FAS-bingo
-一个用于fas服务器bingo小游戏的mcdr插件
+
+一个用于 fas 服务器 bingo 小游戏的 mcdr 插件
+
+# 使用方法
+
+!!bingo 获取帮助信息
