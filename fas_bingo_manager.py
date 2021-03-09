@@ -4,13 +4,12 @@ import re
 import shutil
 import time
 from threading import Lock
-from typing import Optional
 from mcdreforged.api.all import *
 
 PLUGIN_ID = 'fas_bingo_manager'
 PLUGIN_METADATA = {
     'id': PLUGIN_ID,
-    'version': '1.0.6',
+    'version': '1.0.7',
     'name': 'FAS bingo manager',
     'description': 'bingo 小游戏帮助菜单',
     'author': [
@@ -35,47 +34,39 @@ teams = [
     'yellow',
     'pink',
     'aqua',
-    'orange',
     'gray'
 ]
-itemdistribution = {
-    's': '10,4,4,4,3',
-    'a': '8,5,4,4,4',
-    'b': '5,5,5,5,5',
-    'c': '4,4,4,5,8',
-    'd': '3,4,4,4,10'
-}
 pvp = -1
-card = 'c'
 wincondition = 1
 timer = 1
 timer_len = '60'
 game_status = 'not_start'
-# not_start, to_be_start,started,ended
 bingo_players = []
+sp_players = []
 vote_agree = []
 vote_disagree = []
-voting = False
-vote_info = ['当前无进行中的投票\n', '', '']
+vote_title = ''
 
-
-bg_config_msg = ''
 bingo_msg = '''
 -----§6{1}§r V§a{2}§r-----
 FAS服务器bingo小游戏管理插件
 §a!!bg§r 显示快捷控制面板
 §e{0}§r 显示这条帮助信息
-§e{0} team§r [<color>] 选择队伍
-§e{0} vote§r [<project>] 进行投票
+§e{0} team§r 选择队伍
+§e{0} vote§r 进行投票
 §e{0} config§r 快捷修改游戏设置
 §e{0} pvp§r 开/关pvp功能
 §e{0} timer§r 开/关限时模式
 §e{0} timer§r [<time>] 修改限时模式时间，单位：分钟
 §e{0} card§r 修改物品稀有度
 §e{0} wincondition§r [<length>] 修改完成游戏所需连线数量
+
+§c注意：限于MCDR工作机制，在加入队伍后需在指令前加入§e/all §c参数§r
 '''.format(Prefix, PLUGIN_METADATA['name'], PLUGIN_METADATA['version'])
-bg_msg = ''
-bg_vote_msg = ''
+vote_title = ''
+
+reseting_game_lock = Lock()
+voting_lock = Lock()
 
 
 def print_msg(source: CommandSource, msg, tell=True, prefix='§e[FAS-Bingo] §r'):
@@ -98,15 +89,30 @@ def format_time(time_length):
 
 
 def team_join(source: PlayerCommandSource, team=None):
+    global game_status, sp_players, bingo_players
     if game_status != 'not_start':
         print_msg(source, f'当前游戏状态为:{game_status}，无法加入队伍', True)
+        return
+    elif team == 'spectator':
+        source.get_server().execute(f'gamemode spectator {source.player}')
+        if not source.player in sp_players:
+            sp_players.append(source.player)
+        if source.player in bingo_players:
+            bingo_players.remove(source.player)
+            source.get_server().execute(f'team remove {source.player}')
+        return
     elif team in teams:
         source.get_server().execute(
             f'team add {source.player} {team}')
         if not source.player in bingo_players:
             bingo_players.append(source.player)
+        if source.player in sp_players:
+            sp_players.remove(source.player)
+            source.get_server().execute(f'gamemode survival {source.player}')
+        return
     else:
-        print_msg(source, f'无法加入队伍: {team}，请检查队伍名称', True)
+        print_msg(source, f'无法加入队伍: {team}，请重新选择', True)
+        print_team_msg(source)
 
 
 def print_team_msg(source: PlayerCommandSource):
@@ -114,224 +120,182 @@ def print_team_msg(source: PlayerCommandSource):
     if source.player in bingo_players:
         tell_all = '/all '
     bingo_team_msg = RTextList(
-        RText('-------点击颜色 选择队伍-------\n'),
-        RText(' >>红色<<', color=RColor.red).c(
+        RText('§6------------切换队伍-------------§r\n'),
+        RText('§6◤§c红队§6◢   ', color=RColor.red).c(
             RAction.run_command, f'{tell_all}{Prefix} team red'),
-        RText(' >>蓝色<<', color=RColor.blue).c(
+        RText('§6◤§9蓝队§6◢   ', color=RColor.blue).c(
             RAction.run_command, f'{tell_all}{Prefix} team blue'),
-        RText(' >>绿色<<', color=RColor.green).c(
+        RText('§6◤§a绿队§6◢   ', color=RColor.green).c(
             RAction.run_command, f'{tell_all}{Prefix} team green'),
-        RText(' >>黄色<<\n', color=RColor.yellow).c(
+        RText('§6◤§e黄队§6◢\n', color=RColor.yellow).c(
             RAction.run_command, f'{tell_all}{Prefix} team yellow'),
-        RText(' >>粉色<<', color=RColor.dark_purple).c(
+        RText('§6◤§d粉队§6◢   ', color=RColor.dark_purple).c(
             RAction.run_command, f'{tell_all}{Prefix} team pink'),
-        RText(' >>天蓝<<', color=RColor.aqua).c(
+        RText('§6◤§3天蓝§6◢   ', color=RColor.aqua).c(
             RAction.run_command, f'{tell_all}{Prefix} team aqua'),
-        RText(' >>橘黄<<', color=RColor.gold).c(
-            RAction.run_command, f'{tell_all}{Prefix} team orange'),
-        RText(' >>灰色<<', color=RColor.gray).c(
-            RAction.run_command, f'{tell_all}{Prefix} team gray')
+        RText('§6◤§7灰队§6◢   ', color=RColor.gold).c(
+            RAction.run_command, f'{tell_all}{Prefix} team gray'),
+        RText('§6◤§8旁观§6◢', color=RColor.gray).c(
+            RAction.run_command, f'{tell_all}{Prefix} team spectator')
     )
     source.reply(bingo_team_msg)
 
 
 @new_thread
 def vote(source: PlayerCommandSource, msg):
-    global vote_agree, vote_disagree, vote_info, voting, bingo_players
-    if voting:
-        source.reply(vote_info)
+    global vote_agree, vote_disagree, voting_lock, bingo_players, sp_players, vote_title
+    if reseting_game_lock.locked():
+        print_msg(source, '§c重置游戏中，无法进行投票§r', True)
+        return
+    elif source.player in sp_players:
+        print_msg(source, '§c观察者不能投票§r', True)
+        print_team_msg(source)
+        return
     elif not source.player in bingo_players:
-        print_msg(source, RText('请先选择队伍 ').h('点击进行队伍选择').c(
-            RAction.suggest_command, f'/all {Prefix} team'), True)
-    elif msg == 'restart':
-        voting_restart(source)
+        print_msg(source, RText('§c加入非观察者队伍才能投票§r \n'), True)
+        print_team_msg(source)
+        return
+    elif msg == 'restart' and game_status in ['started', 'to_be_start']:
+        print_msg(source,
+                  '游戏进行中，点击开启 ' +
+                  RText('§6◤§c结束游戏§6◢§r').c(RAction.run_command,
+                                            f'/all {Prefix} vote end')
+                  + ' 投票')
+        return
     else:
-        voting = True
-        vote_agree.append(source.player)
-        vote_info = []
-        vote_info.append(f'{source.player} 发起了投票：{msg}  请在30s内表决\n')
-        vote_info.append('')
-        vote_info.append(
-            RTextList(
-                RText('点击同意    ').c(
-                    RAction.run_command, f'/all {Prefix} vote agree'),
-                RText('点击反对').c(RAction.run_command,
-                                f'/all {Prefix} vote disagree')
-            )
-        )
-        reset_vote_info(source)
-        print_vote_msg(source)
-        vote_timer = 0
-        while(voting):
-            time.sleep(1)
-            vote_timer += 1
-            source.get_server().logger.info('')
-            if len(vote_agree) >= len(bingo_players) / 2:
-                source.get_server().execute(
-                    f'[Fas-Bingo] 投票进行中,剩余{30-vote_timer}s')
-                print_msg(
-                    source, f'{source.player}发起的投票：{msg}已被超过半数玩家同意', False)
-                source.get_server().execute(msg)
-                break
-            elif len(vote_disagree) >= len(bingo_players) / 2:
-                print_msg(
-                    source, f'{source.player}发起的投票：{msg}已被超过半数玩家反对', False)
-                break
-            elif vote_timer >= 30 and len(vote_agree) >= len(vote_disagree):
-                source.get_server().execute(msg)
-                print_msg(
-                    source, f'{source.player}发起的投票：{msg}已超时，同意方胜利', False)
-                break
-            elif vote_timer >= 30 and len(vote_disagree) > len(vote_agree):
-                print_msg(
-                    source, f'{source.player}发起的投票：{msg}已超时，反对方胜利', False)
-                break
-            else:
-                pass
-        voting = False
-        reset_vote_info(source)
-        vote_agree = []
-        vote_disagree = []
+        acquire = voting_lock.acquire(blocking=False)
+        if not acquire:
+            print_msg(source, '§c已有进行中的投票：§r\n', True)
+            print_msg(source, vote_title, True, '')
+            print_msg(source,
+                      RTextList(
+                          RText('§6◤§a点击同意§6◢§r').c(
+                              RAction.run_command, f'/all {Prefix} vote agree'),
+                          RText('    '),
+                          RText('§6◤§c点击反对§6◢§r').c(
+                              RAction.run_command, f'/all {Prefix} vote disagree')
+                      ),
+                      True, '')
+            return
+        elif acquire:
+            vote_agree.append(source.player)
+            vote_title = f'{source.player} 发起了投票：{msg}'
+            print_msg(source, vote_title+'  请在30s内表决\n', False)
+            print_msg(source,
+                      RTextList(
+                          RText('§6◤§a点击同意§6◢§r').c(RAction.run_command,
+                                                    f'/all {Prefix} vote agree'),
+                          RText('    '),
+                          RText('§6◤§c点击反对§6◢§r').c(RAction.run_command,
+                                                    f'/all {Prefix} vote disagree')
+                      ),
+                      False, '')
+            vote_timer = 0
+            while(vote_timer < 300):
+                time.sleep(0.1)
+                vote_timer += 1
+                if len(vote_agree) >= len(bingo_players) / 2:
+                    break
+                elif len(vote_disagree) >= len(bingo_players) / 2:
+                    break
+                else:
+                    if vote_timer % 20 == 0:
+                        source.get_server().broadcast(vote_timer/20)
+            execute_vote_result(source, msg, len(vote_agree)
+                                >= len(vote_disagree), vote_timer >= 300)
+            vote_agree = []
+            vote_disagree = []
+            vote_title = ''
+            voting_lock.release()
 
 
-@new_thread
-def voting_restart(source: PlayerCommandSource):
-    global game_status, vote_agree, vote_disagree, server_path
-    if game_status in ['started', 'to_be_start']:
-        source.reply('正在游戏中，请先投票结束游戏')
-    else:
-        voting = True
-        vote_agree.append(source.player)
-        print_msg(source, f'{source.player}投出同意票', False)
-        vote_info = []
-        vote_info.append(f'{source.player} 发起了投票：重置游戏 请在30s内表决\n')
-        vote_info.append('')
-        vote_info.append(
-            RTextList(
-                RText('§a点击同意§r    ').c(
-                    RAction.run_command, f'/all {Prefix} vote agree'),
-                RText('§c点击反对§r').c(RAction.run_command,
-                                    f'/all {Prefix} vote disagree')
-            )
-        )
-        reset_vote_info(source)
-        vote_timer = 0
-        print_vote_msg(source)
-        while(voting):
-            time.sleep(0.5)
-            vote_timer += 1
-            if len(vote_agree) >= len(bingo_players) / 2:
-                print_msg(
-                    source, f'{source.player}发起的投票: 重置游戏 已被超过半数玩家同意', False)
-                restart_game(source, server_path)
-                break
-            elif len(vote_disagree) >= len(bingo_players) / 2:
-                print_msg(
-                    source, f'{source.player}发起的投票: 重置游戏 已被超过半数玩家反对', False)
-                break
-            elif vote_timer >= 60 and len(vote_agree) >= len(vote_disagree):
-                print_msg(
-                    source, f'{source.player}发起的投票: 重置游戏 已超时，同意方胜利', False)
-                restart_game(source, server_path)
-                break
-            elif vote_timer >= 60 and len(vote_disagree) > len(vote_agree):
-                print_msg(
-                    source, f'{source.player}发起的投票: 重置游戏 已超时，反对方胜利', False)
-                break
-            else:
-                pass
-        voting = False
-        reset_vote_info(source)
-        vote_agree = []
-        vote_disagree = []
-
-
-def reset_vote_info(source: CommandSource):
-    global vote_info, voting, vote_agree, vote_disagree
-    if voting:
-        vote_info[1] = f'{len(vote_agree)}人赞同：§a'
-        for i in vote_agree:
-            vote_info[1] += i + ' '
-        vote_info[1] += f'§r\n{len(vote_disagree)}人反对：§c'
-        for i in vote_disagree:
-            vote_info[1] += i + ' '
-        vote_info[1] += '§r\n'
-    else:
-        vote_info = ['当前无进行中的投票\n', '', '']
+def execute_vote_result(source: PlayerCommandSource, msg: str, result=True, time_out=False):
+    global vote_title, server_path
+    message = vote_title + '\n'
+    message += '已超时,' if time_out else '已结束,'
+    message += '同意方' if result else '反对方'
+    message += '胜利'
+    print_msg(source, message, False)
+    if result:
+        if msg == 'restart':
+            restart_game(source, server_path)
+        else:
+            if msg == 'start':
+                for countdown in range(1, 5):
+                    print_msg(source, f'{5 - countdown}秒后开始游戏，请做好准备！', False)
+                    time.sleep(1)
+            source.get_server().execute(msg)
 
 
 def agree_vote(source: PlayerCommandSource):
-    global vote_agree, voting, bingo_players
+    global vote_agree, voting_lock, bingo_players
     if not source.player in bingo_players:
-        print_msg(source, RText('请先选择队伍 ').h('点击进行队伍选择').c(
-            RAction.suggest_command, f'/all {Prefix} team'), True)
-    elif not voting:
+        print_msg(source, RText('请先选择非观察者队伍\n'))
+        print_team_msg(source)
+    elif not voting_lock.locked():
         print_msg(source, '§c没有进行中的投票§r', True)
     elif source.player in vote_disagree or source.player in vote_agree:
         print_msg(source, '§c你已经投过票了§r', True)
     else:
         vote_agree.append(source.player)
         print_msg(source, f'{source.player}投出§a同意§r票', False)
-        reset_vote_info(source)
 
 
 def disagree_vote(source: PlayerCommandSource):
-    global vote_disagree, voting, bingo_players
+    global vote_disagree, voting_lock, bingo_players
     if not source.player in bingo_players:
-        print_msg(source, RText('请先选择队伍 ').h('点击进行队伍选择').c(
-            RAction.suggest_command, f'/all {Prefix} team'), True)
-    elif not voting:
+        print_msg(source, RText('请先选择非观察者队伍 \n'))
+        print_team_msg(source)
+    elif not voting_lock.locked():
         print_msg(source, '§c没有进行中的投票§r', True)
     elif source.player in vote_disagree or source.player in vote_agree:
         print_msg(source, '§c你已经投过票了§r')
     else:
         vote_disagree.append(source.player)
         print_msg(source, f'{source.player}投出了§c反对§r票', False)
-        reset_vote_info(source)
 
 
 def print_vote_msg(source: CommandSource):
-    msg = ''
-    for i in vote_info:
-        msg += i
-    print_msg(source, i, False)
+    global voting_lock, game_status, vote_title
+    if voting_lock.locked:
+        print_msg(source, '已经有正在进行的投票了：')
+        print_msg(source, vote_title, True, '')
+    pass
 
 
-def start_game(source: CommandSource):
-    for countdown in range(1, 5):
-        print_msg(source, f'{5 - countdown}秒后开始游戏，请做好准备！', tell=False)
-        time.sleep(1)
-    source.get_server().execute('start')
-
-
+@new_thread
 def restart_game(source: CommandSource, folder):
-    global game_status, bingo_players
+    global game_status, bingo_players, reseting_game_lock
 
     def mkdir(path):
         if not os.path.exists(path):
             os.mkdir(path)
-    for countdown in range(1, 10):
-        print_msg(source, f'{10 - countdown}s后重启服务器', False)
-        time.sleep(1)
-    bingo_players = []
-    game_status = 'not_start'
-    source.get_server().stop()
-    print_log(source, '服务器关闭中~')
-    source.get_server().wait_for_start()
+    acquire = reseting_game_lock.acquire(blocking=False)
+    if not acquire:
+        print_msg(source, '正在重启中，请不要重复输入')
+        return
+    elif acquire:
+        for countdown in range(1, 10):
+            print_msg(source, f'{10 - countdown}s后重启服务器', False)
+            time.sleep(1)
+        bingo_players = []
+        source.get_server().stop()
+        print_log(source, '服务器关闭中~')
+        source.get_server().wait_for_start()
 
-    print_log(source, '进行文件操作中')
-    for world in world_names:
-        shutil.rmtree(os.path.realpath(os.path.join(folder, world)))
-    shutil.copytree(os.path.join(server_path, 'datapacks'),
-                    os.path.realpath(os.path.join(server_path, 'world', 'datapacks')))
-    print_log(source, '启动服务器中')
-    source.get_server().start()
-    time.sleep(10)
-    source.get_server().stop()
-    print_log(source, '第二次关闭服务器')
-    source.get_server().wait_for_start()
-    print_log(source, '第二次重启，以确保加载到世界生成数据包')
-    source.get_server().start()
+        print_log(source, '进行文件操作中')
+        for world in world_names:
+            shutil.rmtree(os.path.realpath(os.path.join(folder, world)))
+        shutil.copytree(os.path.join(server_path, 'datapacks'),
+                        os.path.realpath(os.path.join(server_path, 'world', 'datapacks')))
+        print_log(source, '启动服务器中')
+        source.get_server().start()
+        while(game_status != 'not_start'):
+            time.sleep(0.01)
+        source.get_server().restart()
+        print_log(source, '第二次关闭服务器')
+        print_log(source, '第二次重启，以确保加载到世界生成数据包')
+        reseting_game_lock.release()
 
 
 def set_pvp(source: CommandSource):
@@ -356,13 +320,8 @@ def set_timer(source: CommandSource):
 
 
 def set_itemdistribution(source: CommandSource, s: str):
-    global itemdistribution, card
-    if s in ['s', 'a', 'b', 'c', 'd']:
-        source.get_server().execute(f'itemdistribution {itemdistribution[s]}')
-        print_msg(source, f'当前物品稀有度为{s}: {itemdistribution[s]}', False)
-        card = s
-    else:
-        source.reply('参数错误！物品稀有度应为s、a、b、c、d之一')
+    source.get_server().execute('itemdistribution '+s)
+    # TODO: 参数校验
 
 
 def set_wincondition(source: CommandSource, line: Integer):
@@ -376,49 +335,68 @@ def set_wincondition(source: CommandSource, line: Integer):
 
 
 def print_bingo_menu(source: PlayerCommandSource):
-    global game_status, bingo_players, voting, vote_info
-    msg = ''
+    global game_status, bingo_players, voting_lock, vote_title
     if not source.player in bingo_players:
-        msg += f'你还未选择队伍：'
-        msg += RText('选择队伍 ').h('点击进行队伍选择').c(RAction.run_command,
-                                              f'{Prefix} team')
-    elif voting:
-        msg += vote_info
+        print_msg(source, RText('请先 §2选择队伍§r').c(
+            RAction.run_command, f'{Prefix} team'), True)
+        print_team_msg(source)
+    elif voting_lock.locked():
+        msg = vote_title
+        msg += '\n'+RTextList(
+            RText('§6◤§a点击同意§6◢§r').c(RAction.run_command,
+                                      f'/all {Prefix} vote agree'),
+            RText('    '),
+            RText('§6◤§c点击反对§6◢§r').c(RAction.run_command,
+                                      f'/all {Prefix} vote disagree')
+        )
+        print_msg(source, msg)
     elif game_status == 'not_start':
-        msg = RTextList(
-            RText('开始游戏  ').h('点击进行游戏开始投票').c(
+        print_msg(source, RTextList(
+            RText('§a开始游戏§r  ').h('点击进行游戏开始投票').c(
                 RAction.run_command, f'/all {Prefix} vote start'),
-            RText('切换队伍  ').h('点击切换队伍').c(
+            RText('§2切换队伍§r  ').h('点击切换队伍').c(
                 RAction.run_command, f'/all {Prefix} team'),
-            RText('游戏设定').h('点击修改游戏设定').c(
+            RText('§e游戏设定§r').h('点击修改游戏设定').c(
                 RAction.run_command, f'/all {Prefix} config')
-        )
+        ))
     elif game_status == 'to_be_start':
-        msg += '游戏马上开始，请做好准备'
+        print_msg(source, '游戏马上开始，请做好准备')
     elif game_status == 'started':
-        msg += RTextList(
-            RText('bingo？  ').h('检查bingo卡片').c(RAction.run_command, f'/bingo'),
-            RText('获取卡片  ').h('获得一张新的bingo卡片').c(
-                RAction.run_command, f'/card'),
-            RText('分享坐标  ').h('向同队伍成员发送坐标').c(
-                RAction.suggest_command, f'/coords 可选注释'),
-            RText('公屏消息 ').h('发送一条所有人可见的消息').c(
-                RAction.suggest_command, f'/all消息'),
-            RText('结束游戏').h('点击进行结束游戏的投票').c(
-                RAction.run_command, f'/all {Prefix} vote end')
-        )
+        print_msg(source,
+                  RTextList(
+                      RText('bingo？  ').h('检查bingo卡片').c(
+                          RAction.run_command, f'/bingo'),
+                      RText('获取卡片  ').h('获得一张新的bingo卡片').c(
+                          RAction.run_command, f'/card'),
+                      RText('分享坐标  ').h('向同队伍成员发送坐标').c(
+                          RAction.suggest_command, f'/coords 可选注释'),
+                      RText('公屏消息 ').h('发送一条所有人可见的消息').c(
+                          RAction.suggest_command, f'/all消息'),
+                      RText('§c结束游戏§r').h('点击进行结束游戏的投票').c(
+                          RAction.run_command, f'/all {Prefix} vote end')
+                  ))
     else:
-        msg += RText('重启游戏').h('进行重置游戏的投票').c(RAction.run_command,
-                                              f'/all {Prefix} vote restart')
-    print_msg(source, msg)
+        print_msg(source, RText('§c重启游戏§r').h('进行重置游戏的投票').c(
+            RAction.run_command, f'/all {Prefix} vote restart'))
 
 
 def print_config_edit(source: PlayerCommandSource):
+    global voting_lock, bingo_players
     msg = ''
     if not source.player in bingo_players:
-        msg += '您未加入队伍，无法更改配置'
-    elif voting:
-        msg += '无法修改游戏配置，请先完成投票：\n'+vote.status()
+        msg += '您未加入队伍，无法更改配置\n'
+        msg += RText('§6◤§2选择队伍§6◢§r').c(RAction.run_command,
+                                         f'{Prefix} team')
+    elif voting_lock.locked():
+        msg += '无法修改游戏配置，请先完成投票：\n'
+        msg += vote_title+'\n'
+        msg += RTextList(
+            RText('§6◤§a点击同意§6◢§r').c(RAction.run_command,
+                                      f'/all {Prefix} vote agree'),
+            RText('    '),
+            RText('§6◤§c点击反对§6◢§r').c(RAction.run_command,
+                                      f'/all {Prefix} vote disagree')
+        )
     elif game_status != 'not_start':
         msg += '只有游戏未开始时可以修改游戏配置！'
     else:
@@ -430,8 +408,8 @@ def print_config_edit(source: PlayerCommandSource):
                                                 f'/all {Prefix} timer 30')
         msg += RText('胜利条件    ').h('选择胜利所需要的连线数量').c(RAction.suggest_command,
                                                      f'/all {Prefix} wincondition 1')
-        msg += RText('物品稀有度    ').h('更改bingo卡片上物品的稀有度分布,s+a+b+c+d=25').c(
-            RAction.suggest_command, f'/all {Prefix} card 稀有度')
+        msg += RText('物品稀有度    ').h('物品的稀有度分布,s+a+b+c+d=25').c(
+            RAction.suggest_command, f'/all {Prefix} card 2,6,9,6,2')
     print_msg(source, msg)
 
 
@@ -441,10 +419,9 @@ def print_unknown_argument_message(source: CommandSource, error: UnknownArgument
 
 
 def register_command(server: ServerInterface):
-    global card, itemdistribution
     server.register_command(
         Literal(Prefix).
-        runs(print_bingo_menu).
+        runs(lambda src: print_msg(src, bingo_msg, False)).
         on_error(UnknownArgument, print_unknown_argument_message, handled=True).
         then(
             Literal('team').
@@ -453,7 +430,7 @@ def register_command(server: ServerInterface):
                 lambda src, ctx: team_join(src, ctx['color'])))
         ).
         then(
-            Literal('vote').runs(lambda src: print_msg(src, vote_info[0]+vote_info[1]+vote_info[2], True)).
+            Literal('vote').runs(lambda src: print_vote_msg(src)).
             then(
                 Literal('start').runs(lambda src: vote(src, 'start'))
             ).
@@ -487,7 +464,7 @@ def register_command(server: ServerInterface):
             )
         ).
         then(
-            Literal('card').runs(lambda src: print_msg(src, f'当前物品稀有度为{card}: {itemdistribution[card]}', False)).
+            Literal('card').
             then(
                 GreedyText('s').runs(
                     lambda src, ctx: set_itemdistribution(src, ctx['s']))
@@ -504,7 +481,11 @@ def register_command(server: ServerInterface):
     server.register_command(Literal('!!bg').runs(print_bingo_menu))
 
 
-def on_load(server: ServerInterface, old):
+def on_player_joined(server: ServerInterface, player, info):
+    server.tell(player, f'welcome {player}')
+
+
+def on_load(server, old):
     register_command(server)
     server.register_help_message(Prefix, RText(
         'bingo游戏菜单').h('点击显示').c(RAction.run_command, Prefix))
@@ -519,4 +500,8 @@ def on_info(server, info):
     elif re.fullmatch(r'BINGO                            Game has started!', info.content):
         game_status = 'started'
     elif not re.search(r'team has gotten bingo!', info.content) is None:
+        game_status = 'ended'
+    elif not re.search(r'Creating Game instance', info.content) is None:
+        game_status = 'not_start'
+    elif re.fullmatch(r'Closing Server', info.content):
         game_status = 'ended'
