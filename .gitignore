@@ -1,3 +1,4 @@
 *.py
 !fas_bingo_manager.py
 __pycache__/
+.vscode/
