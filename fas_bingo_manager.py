@@ -22,6 +22,8 @@ PLUGIN_METADATA = {
 }
 Prefix = '!!bingo'
 server_path = '.\server'
+datapack_path = '.\server\datapacks'
+ignore_datapacks = False
 world_names = [
     'world',
     'world_nether',
@@ -48,19 +50,18 @@ vote_disagree = []
 vote_title = ''
 
 bingo_msg = '''
------§6{1}§r V§a{2}§r-----
-FAS服务器bingo小游戏管理插件
-§a!!bg§r 显示快捷控制面板
-§e{0}§r 显示这条帮助信息
-§e{0} team§r 选择队伍
-§e{0} vote§r 进行投票
-§e{0} config§r 快捷修改游戏设置
-§e{0} pvp§r 开/关pvp功能
-§e{0} timer§r 开/关限时模式
-§e{0} timer§r [<time>] 修改限时模式时间，单位：分钟
-§e{0} card§r 修改物品稀有度
-§e{0} wincondition§r [<length>] 修改完成游戏所需连线数量
-
+§7-----§6{1}§r V§a{2}§7-----
+§6Bingo §7小游戏管理插件
+§a!!bg§7 显示快捷控制面板
+§e{0}§7 显示这条帮助信息
+§e{0} team§7 选择队伍
+§e{0} vote§7 进行投票
+§e{0} config§7 快捷修改游戏设置
+§e{0} pvp§7 开/关pvp功能
+§e{0} timer§7 开/关限时模式
+§e{0} timer§a [<time>] §7修改限时模式时间，单位：分钟
+§e{0} card§7 修改物品稀有度
+§e{0} wincondition§a [<length>] §7修改完成游戏所需连线数量
 §c注意：限于MCDR工作机制，在加入队伍后需在指令前加入§e/all §c参数§r
 '''.format(Prefix, PLUGIN_METADATA['name'], PLUGIN_METADATA['version'])
 vote_title = ''
@@ -117,10 +118,12 @@ def team_join(source: PlayerCommandSource, team=None):
 
 def print_team_msg(source: PlayerCommandSource):
     tell_all = ''
-    if source.player in bingo_players:
+    if source is None:
+        pass
+    elif source.player in bingo_players:
         tell_all = '/all '
-    bingo_team_msg = RTextList(
-        RText('§6------------切换队伍-------------§r\n'),
+    msg = RTextList(
+        RText('§6--------选择队伍---------§r\n'),
         RText('§6◤§c红队§6◢   ', color=RColor.red).c(
             RAction.run_command, f'{tell_all}{Prefix} team red'),
         RText('§6◤§9蓝队§6◢   ', color=RColor.blue).c(
@@ -138,7 +141,10 @@ def print_team_msg(source: PlayerCommandSource):
         RText('§6◤§8旁观§6◢', color=RColor.gray).c(
             RAction.run_command, f'{tell_all}{Prefix} team spectator')
     )
-    source.reply(bingo_team_msg)
+    if source is None:
+        return msg
+    else:
+        source.reply(msg)
 
 
 @new_thread
@@ -165,7 +171,7 @@ def vote(source: PlayerCommandSource, msg):
     else:
         acquire = voting_lock.acquire(blocking=False)
         if not acquire:
-            print_msg(source, '§c已有进行中的投票：§r\n', True)
+            print_msg(source, '§c已有进行中的投票：§r', True)
             print_msg(source, vote_title, True, '')
             print_msg(source,
                       RTextList(
@@ -179,10 +185,11 @@ def vote(source: PlayerCommandSource, msg):
             return
         elif acquire:
             vote_agree.append(source.player)
-            vote_title = f'{source.player} 发起了投票：{msg}'
-            print_msg(source, vote_title+'  请在30s内表决\n', False)
+            vote_title = f'{source.player} 发起投票：{msg}'
+            print_msg(source, vote_title+',请在30s内表决', False, '')
             print_msg(source,
                       RTextList(
+                          RText('  '),
                           RText('§6◤§a点击同意§6◢§r').c(RAction.run_command,
                                                     f'/all {Prefix} vote agree'),
                           RText('    '),
@@ -199,8 +206,9 @@ def vote(source: PlayerCommandSource, msg):
                 elif len(vote_disagree) >= len(bingo_players) / 2:
                     break
                 else:
-                    if vote_timer % 20 == 0:
-                        source.get_server().broadcast(vote_timer/20)
+                    if vote_timer % 100 == 0 or vote_timer >= 250:
+                        source.get_server().broadcast(
+                            f'距离投票结束还有{30 - vote_timer / 10}秒')
             execute_vote_result(source, msg, len(vote_agree)
                                 >= len(vote_disagree), vote_timer >= 300)
             vote_agree = []
@@ -211,18 +219,20 @@ def vote(source: PlayerCommandSource, msg):
 
 def execute_vote_result(source: PlayerCommandSource, msg: str, result=True, time_out=False):
     global vote_title, server_path
-    message = vote_title + '\n'
-    message += '已超时,' if time_out else '已结束,'
-    message += '同意方' if result else '反对方'
-    message += '胜利'
-    print_msg(source, message, False)
+    message = vote_title
+    message += ' 已超时,' if time_out else ' 已结束,'
+    message += '§a同意方' if result else '§c反对方'
+    message += ' §r胜利'
+    print_msg(source, message, False, '')
     if result:
         if msg == 'restart':
             restart_game(source, server_path)
+            return
         else:
             if msg == 'start':
                 for countdown in range(1, 5):
-                    print_msg(source, f'{5 - countdown}秒后开始游戏，请做好准备！', False)
+                    print_msg(
+                        source, f'§c{5 - countdown}§r秒后开始游戏，请做好准备！', False)
                     time.sleep(1)
             source.get_server().execute(msg)
 
@@ -230,7 +240,7 @@ def execute_vote_result(source: PlayerCommandSource, msg: str, result=True, time
 def agree_vote(source: PlayerCommandSource):
     global vote_agree, voting_lock, bingo_players
     if not source.player in bingo_players:
-        print_msg(source, RText('请先选择非观察者队伍\n'))
+        print_msg(source, RText('§c请先选择非观察者队伍§r'))
         print_team_msg(source)
     elif not voting_lock.locked():
         print_msg(source, '§c没有进行中的投票§r', True)
@@ -258,7 +268,7 @@ def disagree_vote(source: PlayerCommandSource):
 def print_vote_msg(source: CommandSource):
     global voting_lock, game_status, vote_title
     if voting_lock.locked:
-        print_msg(source, '已经有正在进行的投票了：')
+        print_msg(source, '§c已经有正在进行的投票了：§r', True, '')
         print_msg(source, vote_title, True, '')
     pass
 
@@ -279,21 +289,22 @@ def restart_game(source: CommandSource, folder):
             print_msg(source, f'{10 - countdown}s后重启服务器', False)
             time.sleep(1)
         bingo_players = []
-        source.get_server().stop()
         print_log(source, '服务器关闭中~')
+        source.get_server().stop()
         source.get_server().wait_for_start()
 
         print_log(source, '进行文件操作中')
         for world in world_names:
             shutil.rmtree(os.path.realpath(os.path.join(folder, world)))
-        shutil.copytree(os.path.join(server_path, 'datapacks'),
-                        os.path.realpath(os.path.join(server_path, 'world', 'datapacks')))
-        print_log(source, '启动服务器中')
+        if not ignore_datapacks:
+            shutil.copytree(datapack_path,
+                            os.path.realpath(os.path.join(server_path, 'world', 'datapacks')))
+
+        print_log(source, '第一次重启服务器')
         source.get_server().start()
         while(game_status != 'not_start'):
             time.sleep(0.01)
         source.get_server().restart()
-        print_log(source, '第二次关闭服务器')
         print_log(source, '第二次重启，以确保加载到世界生成数据包')
         reseting_game_lock.release()
 
@@ -316,12 +327,22 @@ def set_timer(source: CommandSource):
     command_line += 'enable' if timer == -1 else 'disable'
     timer *= -1
     source.get_server().execute(command_line)
-    print_msg(source, f'限时模式已{"关闭" if timer == -1 else "打开"}', False)
+    print_msg(source, f'限时模式已{"§c关闭§r" if timer == -1 else "§a打开§r"}', False)
 
 
 def set_itemdistribution(source: CommandSource, s: str):
-    source.get_server().execute('itemdistribution '+s)
-    # TODO: 参数校验
+    nums = [int(i) for i in s.split(',')]
+    if len(nums) == 5:
+        sum_of_nums = 0
+        for i in nums:
+            sum_of_nums += i
+        if sum_of_nums == 25:
+            source.get_server().execute('itemdistribution '+s)
+            return
+        else:
+            source.reply('§c参数错误：物品稀有度的和不是25§r')
+    else:
+        source.reply('§c参数错误：物品稀有度需要5个数字§r')
 
 
 def set_wincondition(source: CommandSource, line: Integer):
@@ -331,14 +352,13 @@ def set_wincondition(source: CommandSource, line: Integer):
         print_msg(source, f'当前胜利条件为完成{line}条线', False)
         wincondition = line
     else:
-        source.reply('参数错误：胜利条件应该为1-10的整数！')
+        source.reply('§c参数错误：胜利条件应该为1-10的整数！§r')
 
 
 def print_bingo_menu(source: PlayerCommandSource):
     global game_status, bingo_players, voting_lock, vote_title
-    if not source.player in bingo_players:
-        print_msg(source, RText('请先 §2选择队伍§r').c(
-            RAction.run_command, f'{Prefix} team'), True)
+    if source is None or not source.player in bingo_players:
+        print_msg(source, RText('请先 §2选择队伍§r'), True)
         print_team_msg(source)
     elif voting_lock.locked():
         msg = vote_title
@@ -381,14 +401,13 @@ def print_bingo_menu(source: PlayerCommandSource):
 
 
 def print_config_edit(source: PlayerCommandSource):
-    global voting_lock, bingo_players
+    global voting_lock, bingo_players, pvp, timer, timer_len, wincondition
     msg = ''
     if not source.player in bingo_players:
-        msg += '您未加入队伍，无法更改配置\n'
-        msg += RText('§6◤§2选择队伍§6◢§r').c(RAction.run_command,
-                                         f'{Prefix} team')
+        msg = '您未加入队伍，无法更改配置\n'
+        msg += print_team_msg()
     elif voting_lock.locked():
-        msg += '无法修改游戏配置，请先完成投票：\n'
+        msg = '§c无法修改游戏配置，请先完成投票：§r\n'
         msg += vote_title+'\n'
         msg += RTextList(
             RText('§6◤§a点击同意§6◢§r').c(RAction.run_command,
@@ -398,19 +417,31 @@ def print_config_edit(source: PlayerCommandSource):
                                       f'/all {Prefix} vote disagree')
         )
     elif game_status != 'not_start':
-        msg += '只有游戏未开始时可以修改游戏配置！'
+        msg = '§c只有游戏未开始时可以修改游戏配置！§r'
     else:
-        msg += RText('pvp    ').h('开/关 pvp').c(RAction.run_command,
-                                               f'/all {Prefix} pvp')
-        msg += RText('限时模式    ').h('开/关 限时模式').c(RAction.run_command,
-                                                 f'/all {Prefix} timer')
-        msg += RText('限时模式时长    ').h('单位：分钟').c(RAction.suggest_command,
-                                                f'/all {Prefix} timer 30')
-        msg += RText('胜利条件    ').h('选择胜利所需要的连线数量').c(RAction.suggest_command,
-                                                     f'/all {Prefix} wincondition 1')
-        msg += RText('物品稀有度    ').h('物品的稀有度分布,s+a+b+c+d=25').c(
-            RAction.suggest_command, f'/all {Prefix} card 2,6,9,6,2')
-    print_msg(source, msg)
+        msg = RTextList(
+            RText(' '),
+            RText(f'§{"a" if pvp == 1 else "c"}pvp§r')
+            .h(f'{"§a打开" if pvp == -1 else "§c关闭"}§rpvp模式')
+            .c(RAction.run_command, f'/all {Prefix} pvp'),
+            RText('  '),
+            RText(f'§{"a" if timer == 1 else "c"}限时模式§r')
+            .h(f'{"§a打开" if timer == -1 else "§c关闭"}§r限时模式')
+            .c(RAction.run_command, f'/all {Prefix} timer'),
+            RText('  '),
+            RText('限时时长')
+            .h(f'当前 {timer_len}min, 点击切换')
+            .c(RAction.suggest_command, f'/all {Prefix} timer 30'),
+            RText('\n  '),
+            RText('胜利条件')
+            .h(f'选择胜利所需要的连线数量, 当前为 {wincondition} 条')
+            .c(RAction.suggest_command, f'/all {Prefix} wincondition 1'),
+            RText('    '),
+            RText('物品稀有度')
+            .h('物品的稀有度分布，要求S+A+B+C+D = 25')
+            .c(RAction.suggest_command, f'/all {Prefix} card 2,6,9,6,2')
+        )
+    print_msg(source, msg, prefix='')
 
 
 def print_unknown_argument_message(source: CommandSource, error: UnknownArgument):
@@ -421,7 +452,7 @@ def print_unknown_argument_message(source: CommandSource, error: UnknownArgument
 def register_command(server: ServerInterface):
     server.register_command(
         Literal(Prefix).
-        runs(lambda src: print_msg(src, bingo_msg, False)).
+        runs(lambda src: print_msg(src, bingo_msg, False, '')).
         on_error(UnknownArgument, print_unknown_argument_message, handled=True).
         then(
             Literal('team').
@@ -482,7 +513,7 @@ def register_command(server: ServerInterface):
 
 
 def on_player_joined(server: ServerInterface, player, info):
-    server.tell(player, f'welcome {player}')
+    server.tell(player, print_team_msg(None))
 
 
 def on_load(server, old):
