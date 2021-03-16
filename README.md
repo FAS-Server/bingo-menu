@@ -15,9 +15,9 @@
 
 3. 将 `fas_bingo_manager.py` 加入 `plugin/ `文件夹
 
-4. 使用类 paper 的服务端, 并加入 [Bingo插件](https://github.com/Extremelyd1/minecraft-bingo)
+4. 使用类 paper 的服务端(如 yatopia), 并加入 [Bingo插件](https://github.com/Extremelyd1/minecraft-bingo)
 
-5. 在 server/ 目录下添加 `datapacks/` 目录, 并将专用数据包`world_gene.zip`加入其中(用于修改世界生成时的群系与结构)
+5. 在 server/ 目录下添加 `datapacks/` 目录, 并将专用数据包`Worldgen_{version}.zip`加入其中(用于修改世界生成时的群系与结构)
 
 6. 开始游玩, 并在游戏中输入 `!!bg` 获取帮助信息
 
@@ -33,7 +33,7 @@ bingo_root\
         plugins\
             MinecraftBingo-{version}.jar
         datapacks\
-            world_gene.zip
+            Worldgen_{version}.zip
 ```
 
 **tips**: 在加入队伍后，需要使用 `/all` 发送全体消息, 因为 MCDR 无法响应队伍消息。
