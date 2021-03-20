@@ -4,7 +4,12 @@ import re
 import shutil
 import time
 from threading import Lock
-from mcdreforged.api.all import *
+from mcdreforged.api.decorator import *
+from mcdreforged.api.command import Literal,GreedyText,UnknownArgument,Integer
+from mcdreforged.api.rtext import RAction,RText,RTextList,RColor
+from mcdreforged.api.types import CommandSource,PlayerCommandSource,ServerInterface
+
+# TODO: 结束后定时重启 管理员手动reset
 
 PLUGIN_ID = 'fas_bingo_manager'
 PLUGIN_METADATA = {
@@ -21,8 +26,8 @@ PLUGIN_METADATA = {
     }
 }
 Prefix = '!!bingo'
-server_path = '.\server'
-datapack_path = '.\server\datapacks'
+server_path = r'.\server'
+datapack_path = r'.\server\datapacks'
 ignore_datapacks = False
 world_names = [
     'world',
@@ -277,9 +282,6 @@ def print_vote_msg(source: CommandSource):
 def restart_game(source: CommandSource, folder):
     global game_status, bingo_players, reseting_game_lock
 
-    def mkdir(path):
-        if not os.path.exists(path):
-            os.mkdir(path)
     acquire = reseting_game_lock.acquire(blocking=False)
     if not acquire:
         print_msg(source, '正在重启中，请不要重复输入')
@@ -316,6 +318,7 @@ def set_pvp(source: CommandSource):
 
 
 def set_timer_len(source: CommandSource, length: int):
+    global timer_len
     source.get_server().execute('timer {}'.format(length * 60))
     timer_len = length
     print_msg(source, f'当前的时间限制为 {format_time(length)}', False)
@@ -405,7 +408,7 @@ def print_config_edit(source: PlayerCommandSource):
     msg = ''
     if not source.player in bingo_players:
         msg = '您未加入队伍，无法更改配置\n'
-        msg += print_team_msg()
+        msg += print_team_msg(source)
     elif voting_lock.locked():
         msg = '§c无法修改游戏配置，请先完成投票：§r\n'
         msg += vote_title+'\n'
@@ -452,7 +455,7 @@ def print_unknown_argument_message(source: CommandSource, error: UnknownArgument
 def register_command(server: ServerInterface):
     server.register_command(
         Literal(Prefix).
-        runs(lambda src: print_msg(src, bingo_msg, False, '')).
+        runs(lambda src: print_msg(src, bingo_msg, True, '')).
         on_error(UnknownArgument, print_unknown_argument_message, handled=True).
         then(
             Literal('team').
