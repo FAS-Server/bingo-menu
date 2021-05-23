@@ -122,29 +122,24 @@ def team_join(source: PlayerCommandSource, team=None):
 
 
 def print_team_msg(source: PlayerCommandSource):
-    tell_all = ''
-    if source is None:
-        pass
-    elif source.player in bingo_players:
-        tell_all = '/all '
     msg = RTextList(
         RText('§6--------选择队伍---------§r\n'),
         RText('§6◤§c红队§6◢   ', color=RColor.red).c(
-            RAction.run_command, f'{tell_all}{Prefix} team red'),
+            RAction.run_command, f'/all {Prefix} team red'),
         RText('§6◤§9蓝队§6◢   ', color=RColor.blue).c(
-            RAction.run_command, f'{tell_all}{Prefix} team blue'),
+            RAction.run_command, f'/all {Prefix} team blue'),
         RText('§6◤§a绿队§6◢   ', color=RColor.green).c(
-            RAction.run_command, f'{tell_all}{Prefix} team green'),
+            RAction.run_command, f'/all {Prefix} team green'),
         RText('§6◤§e黄队§6◢\n', color=RColor.yellow).c(
-            RAction.run_command, f'{tell_all}{Prefix} team yellow'),
+            RAction.run_command, f'/all {Prefix} team yellow'),
         RText('§6◤§d粉队§6◢   ', color=RColor.dark_purple).c(
-            RAction.run_command, f'{tell_all}{Prefix} team pink'),
+            RAction.run_command, f'/all {Prefix} team pink'),
         RText('§6◤§3天蓝§6◢   ', color=RColor.aqua).c(
-            RAction.run_command, f'{tell_all}{Prefix} team aqua'),
+            RAction.run_command, f'/all {Prefix} team aqua'),
         RText('§6◤§7灰队§6◢   ', color=RColor.gold).c(
-            RAction.run_command, f'{tell_all}{Prefix} team gray'),
+            RAction.run_command, f'/all {Prefix} team gray'),
         RText('§6◤§8旁观§6◢', color=RColor.gray).c(
-            RAction.run_command, f'{tell_all}{Prefix} team spectator')
+            RAction.run_command, f'/all {Prefix} team spectator')
     )
     if source is None:
         return msg
