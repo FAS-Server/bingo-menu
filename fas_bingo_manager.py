@@ -5,22 +5,22 @@ import shutil
 import time
 from threading import Lock
 from mcdreforged.api.decorator import *
-from mcdreforged.api.command import Literal,GreedyText,UnknownArgument,Integer
-from mcdreforged.api.rtext import RAction,RText,RTextList,RColor
-from mcdreforged.api.types import CommandSource,PlayerCommandSource,ServerInterface
+from mcdreforged.api.command import Literal, GreedyText, UnknownArgument, Integer
+from mcdreforged.api.rtext import RAction, RText, RTextList, RColor
+from mcdreforged.api.types import CommandSource, PlayerCommandSource, ServerInterface
 
 # TODO: 结束后定时重启 管理员手动reset
 
-PLUGIN_ID = 'fas_bingo_manager'
+PLUGIN_ID = 'bingo_menu'
 PLUGIN_METADATA = {
     'id': PLUGIN_ID,
     'version': '1.0.7',
-    'name': 'FAS bingo manager',
+    'name': 'FAS bingo menu',
     'description': 'bingo 小游戏帮助菜单',
     'author': [
         'YehowahLiu'
     ],
-    'link': 'https://github.com/FAS-Server/FAS-bingo',
+    'link': 'https://github.com/FAS-Server/bingo-menu',
     'dependencies': {
         'mcdreforged': '>=1.0.0-alpha.7',
     }
@@ -75,7 +75,7 @@ reseting_game_lock = Lock()
 voting_lock = Lock()
 
 
-def print_msg(source: CommandSource, msg, tell=True, prefix='§e[FAS-Bingo] §r'):
+def print_msg(source: CommandSource, msg, tell=True, prefix='§e[Bingo] §r'):
     msg = prefix + msg
     if source.is_player and not tell:
         source.get_server().say(msg)
@@ -83,7 +83,7 @@ def print_msg(source: CommandSource, msg, tell=True, prefix='§e[FAS-Bingo] §r'
         source.reply(msg)
 
 
-def print_log(source: CommandSource, msg, prefix='§e[FAS-Bingo] §r'):
+def print_log(source: CommandSource, msg, prefix='§e[Bingo] §r'):
     source.get_server().logger.info(prefix + msg)
 
 
