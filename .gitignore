@@ -1,5 +1,5 @@
 *.py
-!bingo_manager.py
+!bingo_menu.py
 !handler/bingo_handler.py
 __pycache__/
 .vscode/
