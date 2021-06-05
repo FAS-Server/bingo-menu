@@ -13,7 +13,7 @@ from mcdreforged.api.types import CommandSource, PlayerCommandSource, ServerInte
 PLUGIN_ID = 'bingo_menu'
 PLUGIN_METADATA = {
     'id': PLUGIN_ID,
-    'version': '1.1.0',
+    'version': '1.1.1',
     'name': 'FAS bingo menu',
     'description': 'bingo 小游戏帮助菜单',
     'author': [
@@ -26,7 +26,9 @@ PLUGIN_METADATA = {
 }
 
 conf = {
-    ##### PLUGIN SETTINGS #####
+    # -------------------
+    # | Plugin Settings |
+    # -------------------
     'server_path': './server',
     'datapack_path': './server/datapacks',
     'ignore_datapacks': False,
@@ -34,7 +36,9 @@ conf = {
     'teams': ['red', 'blue', 'green', 'yellow', 'pink', 'aqua', 'gray', 'orange'],
     'restart_countdown': 300,
 
-    ##### GAME SETTINGS #####
+    # -----------------
+    # | Game Settings |
+    # -----------------
     'timer': True,
     'timer_len': 1800,
     'mode': 'lines',
@@ -53,6 +57,10 @@ teamed_players = []
 spec_players = []
 vote_agree_list = []
 vote_disagree_list = []
+
+# ------------
+# | Messages |
+# ------------
 
 bingo_msg = '''§7-----§6{1}§r V§a{2}§7-----
 §6Bingo §7小游戏管理插件
@@ -133,7 +141,7 @@ started_menu = RTextList(
         RAction.run_command, f'{to_all}{Prefix} vote reroll'
     ),
     RText('公屏消息 ').h('发送一条所有人可见的消息').c(
-        RAction.suggest_command, '/all消息'),
+        RAction.suggest_command, '/all 消息'),
     RText('§c结束游戏§r').h('点击进行结束游戏的投票').c(
         RAction.run_command, f'{to_all}{Prefix} vote end')
 )
@@ -154,19 +162,23 @@ vote_choice_msg = RTextList(
 
 mode_menu = RTextList(
     "§6-----选择模式-----\n",
-    RText("§6◤§e全收集§6◢").c(RAction.run_command, Prefix + " mode full"),
+    RText("§6◤§e全收集§6◢").c(RAction.run_command,
+                           to_all + Prefix + " mode full"),
     "    ",
     RText("§6◤§a正 常§6◢").c(RAction.suggest_command,
-                           Prefix + " mode lines 1"),
+                           to_all + Prefix + " mode lines 1"),
     "    ",
     RText("§6◤§d独 占§6◢").c(RAction.suggest_command,
-                           Prefix + " mode lockout 1")
+                           to_all + Prefix + " mode lockout 1")
 )
 
 reseting_game_lock = Lock()
 voting_lock = Lock()
 
-##### General #####
+
+# ---------
+# | Utils |
+# ---------
 
 
 def print_msg(source: CommandSource, msg, tell=True, prefix='§e[Bingo] §r'):
@@ -187,7 +199,10 @@ def format_time(time_length):
     elif time_length < 60 * 60:
         return '{}小时'.format(round(time_length / 60, 2))
 
-##### Team #####
+
+# --------
+# | Team |
+# --------
 
 
 def team_join(source: PlayerCommandSource, team=None):
@@ -238,10 +253,12 @@ def team_random(source: PlayerCommandSource, num: int):
             players.remove(player)
             i += 1
     else:
-        print_msg(source, "invalid number")
+        print_msg(source, "错误的数字, 队伍数目应在1到{}之间".format(len(teams)))
 
-##### Vote #####
 
+# --------
+# | Vote |
+# --------
 
 @new_thread
 def vote(source: PlayerCommandSource, command):
@@ -295,7 +312,7 @@ def vote(source: PlayerCommandSource, command):
                     break
                 elif vote_timer % 10 == 0:
                     server.execute(
-                        'bossbar set bingo:vote name {"text":"Vote time left:+' + str(300-vote_timer/10)+'s","color":"red"}')
+                        'bossbar set bingo:vote name {"text":"Vote time left:' + str(300-vote_timer/10)+'s","color":"red"}')
                     if vote_timer % 100 == 0 or vote_timer >= 250:
                         server.say(f'距离投票结束还有{30 - vote_timer / 10}秒')
             server.execute('bossbar remove bingo:vote')
@@ -358,7 +375,9 @@ def print_vote_msg(source: CommandSource):
     pass
 
 
-##### Server Control #####
+# ------------------
+# | Server Control |
+# ------------------
 
 @new_thread
 def restart_game(server: ServerInterface):
@@ -403,7 +422,9 @@ def restart_game(server: ServerInterface):
         reseting_game_lock.release()
 
 
-##### Config Game #####
+# ---------------
+# | Game Config |
+# ---------------
 
 def print_config_edit(source: PlayerCommandSource):
     global voting_lock, teamed_players, conf
