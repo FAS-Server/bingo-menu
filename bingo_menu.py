@@ -417,7 +417,7 @@ def restart_game(server: ServerInterface):
         server.start()
 
         while(game_status != 'not_start'):
-            time.sleep(0.01)
+            time.sleep(0.1)
         server.restart()
         reseting_game_lock.release()
 
@@ -465,12 +465,11 @@ def set_timer_len(source: CommandSource, length: int):
 
 def set_timer(source: CommandSource):
     global conf
-    timer = conf["timer"]
     command_line = 'timer '
-    command_line += 'disable' if timer else 'enable'
-    timer = not timer
+    command_line += 'disable' if conf["timer"] else 'enable'
+    conf["timer"] = not conf["timer"]
     source.get_server().execute(command_line)
-    print_msg(source, f'限时模式已{"§a打开§r" if timer else "§c关闭§r"}', False)
+    print_msg(source, f'限时模式已{"§a打开§r" if conf["timer"] else "§c关闭§r"}', False)
 
 
 def set_itemdist(source: CommandSource, s: str):

@@ -11,7 +11,11 @@ class BingoHandler(VanillaHandler):
 	def parse_server_stdout(self, text):
 		result = self._get_server_stdout_raw_result(text)
 		self._content_parse(result)
-		parsed = parse('{name}: {message}', result.content)
+		parsed = parse('<{name}> {message}', result.content)
+        if parsed is None:
+            parsed = parse('{name}: {message}', result.content)
+        if parsed is None:
+			parsed = parse('[{dim_name}]<{name}> {message}', result.content)
 		if parsed is None:
 			parsed = parse('[{dim_name}] {name}: {message}', result.content)
 		if parsed is not None and self._verify_player_name(parsed['name']):
