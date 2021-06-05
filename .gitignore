@@ -3,3 +3,4 @@
 !handler/bingo_handler.py
 __pycache__/
 .vscode/
+.idea/
