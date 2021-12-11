@@ -14,7 +14,7 @@ A manager plugin for Bingo games, making it easier for players to select team, c
    - Edit `custom_handlers` in MCDR config file `config.yml` , add `- handler.bingo_handler.BingoHandler`
    - Set the `handler` in file `config.yml` to `bingo_handler`
 
-3. add `fas_bingo_manager.py` to MCDR's plugin folder `plugin/ `
+3. add `bingo_menu.py` to MCDR's plugin folder `plugin/ `
 
 4. Setup a [paper](https://papermc.io/) server, add the  [Bingo](https://github.com/Extremelyd1/minecraft-bingo) plugin
 

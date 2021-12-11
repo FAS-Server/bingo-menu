@@ -15,7 +15,7 @@
    - 在 `config.yml` 中的 custom_handlers项目下添加 - handler.bingo_handler.BingoHandler
    - 在 `config.yml` 中设置 handler 为 bingo_handler
 
-3. 将 `fas_bingo_manager.py` 加入 `plugin/ `文件夹
+3. 将 `bingo_menu.py` 加入 `plugin/ `文件夹
 
 4. 使用 paper 的服务端, 并加入 [Bingo插件](https://github.com/Extremelyd1/minecraft-bingo)
 
